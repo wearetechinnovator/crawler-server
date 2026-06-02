@@ -16,6 +16,10 @@ const propertySchema = new mongoose.Schema({
         type: String,
         default: 'pending'
     },
+    is_verified: {
+        type: Boolean,
+        default: false
+    },
     is_del: {
         type: Boolean,
         default: false

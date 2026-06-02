@@ -21,6 +21,10 @@ router
     .get(authMiddleware, PropertyController.downloadVerificationFile);
 
 router
+    .route("/check-property-verification")
+    .post(authMiddleware, PropertyController.checkVerification);
+
+router
     .route("/delete-property/:id")
     .delete(authMiddleware, PropertyController.deleteProperty);
 

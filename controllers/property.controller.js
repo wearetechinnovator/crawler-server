@@ -3,6 +3,7 @@ const propertyModel = require("../models/property.model");
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 
 class PropertyController {
@@ -115,19 +116,57 @@ class PropertyController {
         fs.writeFileSync(filePath, fileContent);
 
         // Send the file as response for download;
-        res.download(filePath, fileName, (err) => {
+        res.status(200).download(filePath, fileName, (err) => {
+            // Delete the verification file;
+            fs.unlink(filePath, (err) => {
+                if (err) {
+                    console.error("File deletion error:", err);
+                }
+            });
+
             if (err) {
                 console.error("File download error:", err);
                 throw new ApiError(500, "File download failed");
             }
-        });
+        })
 
-        // Delete the verification file;
-        fs.unlink(filePath, (err) => {
-            if (err) {
-                console.error("File deletion error:", err);
+    }
+
+    static async checkVerification(req, res) {
+        const { propery_id } = req.body;
+
+        if (!propery_id) {
+            throw new ApiError(500, "property id is required.");
+        }
+
+        const property = await propertyModel.findOne({ _id: propery_id, is_del: false });
+        if (!property) {
+            throw new ApiError(500, "Property not found");
+        }
+
+        const ORIGIN = property.website_url;
+        const FILE_NAME = 'crawlbot-ai.json';
+
+        // Check secure key exist or not
+        const response = await axios.get(`${ORIGIN}/${FILE_NAME}`);
+        const secureData = response.data.secure_key;
+
+        if (!secureData) {
+            throw new ApiError(401, "Invalid property.")
+        }
+
+        if (property.secure_key !== secureData) {
+            throw new ApiError(401, "Invalid Secure key or invalid property.")
+        }
+
+        // Change verify status
+        await propertyModel.updateOne({ _id: propery_id }, {
+            $set: {
+                is_verified: true
             }
-        });
+        })
+
+        return res.status(200).json({ msg: "Verification successfully complete." })
     }
 }
 
