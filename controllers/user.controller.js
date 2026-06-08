@@ -1,3 +1,4 @@
+const propertyModel = require("../models/property.model");
 const userModel = require("../models/user.model");
 const ApiError = require("../utils/ApiError");
 const bcrypt = require("bcryptjs");
@@ -98,11 +99,15 @@ class UserController {
             throw new ApiError(400, "Invalid phone or password");
         }
 
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+        // Get Properties count;
+        const propertiesCount = await propertyModel.countDocuments({ is_del: false })
+
+        // const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
         return res.status(200).json({
             msg: "Login successful",
-            data: { token }
+            data: { token, properties_count: propertiesCount }
         });
     }
 
@@ -139,6 +144,39 @@ class UserController {
         return res.status(200).json({
             msg: "Password changed successfully"
         });
+    }
+
+    static async checkToken(req, res) {
+        try {
+            const { token } = req.body;
+
+            if (!token) {
+                return res.status(401).json({
+                    valid: false,
+                    message: "Token required"
+                });
+            }
+
+            const decoded = jwt.verify(
+                token,
+                process.env.JWT_SECRET
+            );
+
+            if (!decoded) {
+                return res.status(401).json({ valid: false });
+            }
+
+            return res.status(200).json({
+                valid: true,
+                user: decoded
+            });
+
+        } catch (error) {
+            return res.status(401).json({
+                valid: false,
+                message: "Invalid or expired token"
+            });
+        }
     }
 }
 

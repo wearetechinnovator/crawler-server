@@ -9,6 +9,10 @@ router
     .post(UserController.createUser);
 
 router
+    .route('/check-token')
+    .post(UserController.checkToken);
+
+router
     .route("/login")
     .post(UserController.login);
 

@@ -1,12 +1,12 @@
 const userModel = require("../models/user.model");
 const Crawler = require("../service/Crawler.service");
 const ApiError = require("../utils/ApiError");
+const path = require("path");
+const { verifyWebsite } = require("../utils/verifyWebsite");
 const { QdrantVectorStore } = require("@langchain/qdrant");
 const { HuggingFaceTransformersEmbeddings } = require("@langchain/community/embeddings/huggingface_transformers");
 const Qdrantclient = require("../db/qdrant");
 const { ChatGroq } = require("@langchain/groq");
-const path = require("path");
-const { verifyWebsite } = require("../utils/verifyWebsite");
 
 
 

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const Constant = require("../utils/Constant")
 
 
 class PropertyController {
@@ -108,7 +109,7 @@ class PropertyController {
             throw new ApiError(404, "Property not found");
         }
 
-        // Genarate a json file with this verification key
+        // Generate a json file with this verification key
         const fileContent = JSON.stringify({ secure_key: property.secure_key });
         const fileName = `verification_${property._id}.json`;
 
@@ -117,17 +118,17 @@ class PropertyController {
 
         // Send the file as response for download;
         res.status(200).download(filePath, fileName, (err) => {
+            if (err) {
+                console.error("File download error:", err);
+                throw new ApiError(500, "File download failed");
+            }
+
             // Delete the verification file;
             fs.unlink(filePath, (err) => {
                 if (err) {
                     console.error("File deletion error:", err);
                 }
             });
-
-            if (err) {
-                console.error("File download error:", err);
-                throw new ApiError(500, "File download failed");
-            }
         })
 
     }
@@ -136,7 +137,7 @@ class PropertyController {
         const { propery_id } = req.body;
 
         if (!propery_id) {
-            throw new ApiError(500, "property id is required.");
+            throw new ApiError(500, "Property id is required.");
         }
 
         const property = await propertyModel.findOne({ _id: propery_id, is_del: false });
@@ -145,7 +146,7 @@ class PropertyController {
         }
 
         const ORIGIN = property.website_url;
-        const FILE_NAME = 'crawlbot-ai.json';
+        const FILE_NAME = Constant.VERIFICATION_FILE;
 
         // Check secure key exist or not
         const response = await axios.get(`${ORIGIN}/${FILE_NAME}`);
