@@ -7,37 +7,47 @@ const { QdrantVectorStore } = require("@langchain/qdrant");
 const { HuggingFaceTransformersEmbeddings } = require("@langchain/community/embeddings/huggingface_transformers");
 const Qdrantclient = require("../db/qdrant");
 const { ChatGroq } = require("@langchain/groq");
+const propertyModel = require("../models/property.model");
+
 
 
 
 class WebServiceController {
     static async crawl(req, res) {
-        const { url, maxPages } = req.body;
+        const { propertyId, maxPages } = req.body;
 
-        if (!url) {
+        if (!propertyId) {
             throw new ApiError(400, "URL is required");
         }
 
-        // First check website is verified
-        const isVerified = await verifyWebsite(url);
-        if (!isVerified) {
-            throw new ApiError(
-                400,
-                "Website is not verified. Please ensure ai_crawl.json is accessible at the root of the website."
-            );
-        }
+        // Get Property URL;
+        const property = await propertyModel.findOne({ _id: propertyId })
+        const url = property.website_url;
 
+        // First check website is verified
+        if (!property.is_verified) {
+            await propertyModel.updateOne({ _id: propertyId }, {
+                $set: {
+                    is_verified: false
+                }
+            })
+
+            throw new ApiError(401, 'Property is unverified');
+        }
 
         // Crawl the website
         const crawler = new Crawler({
             startUrl: url,
-            maxPages: maxPages || 50,
+            maxPages: maxPages || 100,
             concurrency: 5,
             chunkSize: 1500,
-            chunkOverlap: 300
+            chunkOverlap: 300,
+            req,
+            res,
+            propertyId
         });
 
-        const chunks = await crawler.start();
+        const {chunks, count} = await crawler.start();
 
 
         /*Convert chunks to documents*/
@@ -63,11 +73,18 @@ class WebServiceController {
             }
         );
 
+        // Change website crawl status;
+        await propertyModel.updateOne({ website_url: url }, {
+            $set: {
+                is_crawled: true,
+                total_endpoints: count
+            }
+        });
+
         return res.status(200).json({
             message: "Crawling completed and data stored in Qdrant",
             data: { chunksCount: chunks.length }
         });
-
     }
 
     static async query(req, res) {

@@ -5,11 +5,14 @@ require("dotenv").config();
 const { createServer } = require("http");
 const connection = require("./db/connection");
 const app = require("./app");
+const { initializeSocket } = require("./socket/socket");
 
 
 const PORT = process.env.PORT || 8080;
 const httpServer = createServer(app);
 
+
+initializeSocket(httpServer);
 
 connection().then(con => {
     if (con) {

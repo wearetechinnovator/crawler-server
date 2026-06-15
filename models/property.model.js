@@ -10,7 +10,10 @@ const propertySchema = new mongoose.Schema({
     },
     name: String,
     website_url: String,
-    total_endpoints: Number,
+    total_endpoints: {
+        type: Number,
+        default: 0
+    },
     secure_key: String,
     is_crawled: {
         enum: ['pending', 'crawling', 'crawled', 'failed'],
