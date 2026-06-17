@@ -3,6 +3,8 @@ const userModel = require("../models/user.model");
 const ApiError = require("../utils/ApiError");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const fs = require("node:fs")
+const path = require('node:path');
 
 
 class UserController {
@@ -38,25 +40,52 @@ class UserController {
     }
 
     static async updateUser(req, res) {
-        const { name, phone } = req.body;
+        const { name, profile_img } = req.body;
         const data = req.data; // from auth middleware;
 
-        // check phone is unique
-        if (phone) {
-            const existingUser = await userModel.findOne({ phone, _id: { $ne: data.id } });
-            if (existingUser) {
-                throw new ApiError(400, "User with this phone number already exists");
+        const userData = await userModel.findById(data.id);
+        const filePath = path.join(__dirname, "..", "uploads");
+        let fileName = userData.profile_img;
+
+        
+        if (profile_img) {
+            // Delete previous image if exists
+            if (userData.profile_img) {
+                const oldFile = path.join(filePath, userData.profile_img);
+
+                if (fs.existsSync(oldFile)) {
+                    fs.unlinkSync(oldFile);
+                }
             }
+
+            const matches = profile_img.match(/^data:(.+);base64,(.+)$/);
+            if (!matches) {
+                throw new ApiError(400, "Invalid image format");
+            }
+
+            const ext = matches[1].split("/")[1];
+            const buffer = Buffer.from(matches[2], "base64");
+
+            // Create new file name
+            fileName = `${Date.now()}.${ext}`;
+
+            fs.writeFileSync(
+                path.join(filePath, fileName),
+                buffer
+            );
         }
 
-        const updatedUser = await userModel.findByIdAndUpdate(
-            data.id,
-            { name, phone },
-            { new: true }
-        );
 
-        if (!updatedUser) {
-            throw new ApiError(404, "User not found");
+        const updatedUser = await userModel.updateOne({ _id: data.id }, {
+            $set: {
+                name,
+                profile_img: fileName
+            }
+        });
+
+
+        if (updatedUser.modifiedCount === 0) {
+            throw new ApiError(404, "User not updated!");
         }
 
         return res.status(200).json({
@@ -79,7 +108,6 @@ class UserController {
             msg: "User fetched successfully",
             data: user
         });
-
     }
 
     static async login(req, res) {
@@ -100,7 +128,7 @@ class UserController {
         }
 
         // Get Properties count;
-        const propertiesCount = await propertyModel.countDocuments({ is_del: false })
+        const propertiesCount = await propertyModel.countDocuments({ is_del: false, user_id: user._id })
 
         // const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
@@ -166,9 +194,15 @@ class UserController {
                 return res.status(401).json({ valid: false });
             }
 
+            // Get Properties count;
+            const propertiesCount = await propertyModel.countDocuments({
+                is_del: false, user_id: decoded.id
+            })
+
             return res.status(200).json({
                 valid: true,
-                user: decoded
+                user: decoded,
+                property_count: propertiesCount || 0
             });
 
         } catch (error) {

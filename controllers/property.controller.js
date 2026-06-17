@@ -169,6 +169,27 @@ class PropertyController {
 
         return res.status(200).json({ msg: "Verification successfully complete." })
     }
+
+    static async updateProperty(req, res) {
+        const { name, id } = req.body;
+        const data = req.data; // from auth middleware;
+
+        if (!name || !id) {
+            throw new ApiError(400, "Property name and id is required.");
+        }
+
+        const updateProperty = await propertyModel.updateOne({ _id: id, user_id: data.id }, {
+            $set: {
+                name: name
+            }
+        })
+
+        if(updateProperty.modifiedCount === 0){
+            throw new ApiError(500, "Property not update");
+        }
+
+        return res.status(200).json({msg: 'Property update successfully'});
+    }
 }
 
 

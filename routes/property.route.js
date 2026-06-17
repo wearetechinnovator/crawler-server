@@ -28,5 +28,9 @@ router
     .route("/delete-property/:id")
     .delete(authMiddleware, PropertyController.deleteProperty);
 
+router
+    .route("/update-property")
+    .patch(authMiddleware, PropertyController.updateProperty);
+
 
 module.exports = router;

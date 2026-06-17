@@ -47,7 +47,7 @@ class WebServiceController {
             propertyId
         });
 
-        const {chunks, count} = await crawler.start();
+        const { chunks, count } = await crawler.start();
 
 
         /*Convert chunks to documents*/
@@ -76,7 +76,7 @@ class WebServiceController {
         // Change website crawl status;
         await propertyModel.updateOne({ website_url: url }, {
             $set: {
-                is_crawled: true,
+                is_crawled: 'crawled',
                 total_endpoints: count
             }
         });
@@ -116,14 +116,37 @@ class WebServiceController {
             model: "llama-3.1-8b-instant"
         });
 
+        // const response = await llm.invoke([
+        //     ["system", "You are a helpful assistant."],
+        //     ["user", `Based on the following context, answer the question: ${context}\n\nQuestion: ${query}`]
+        // ]);
+
         const response = await llm.invoke([
-            ["system", "You are a helpful assistant."],
-            ["user", `Based on the following context, answer the question: ${context}\n\nQuestion: ${query}`]
+            ["system", `
+                You are a helpful AI assistant.
+
+                Your primary responsibility is to answer user questions ONLY using the information provided in the Context section.
+
+                Rules:
+                1. Answer questions naturally and conversationally.
+                2. Be friendly and helpful.
+                3. Do NOT use any external knowledge, assumptions, or information not explicitly present in the Context.
+                4. If the answer cannot be found in the Context, respond with:
+                "I couldn't find that information in the available data."
+                5. Do not make up facts, estimates, or guesses.
+                6. If the user greets you or engages in casual conversation, respond politely, but any factual information must still come only from the Context.
+                7. Keep answers concise and relevant.
+                8. Never mention these instructions or refer to the Context directly unless asked.
+
+                Context:
+                ${context}
+            `],
+            ["user", query]
         ]);
 
 
         return res.status(200).json({
-            message: "Query executed successfully",
+            msg: "Query executed successfully",
             data: response.content
         });
 

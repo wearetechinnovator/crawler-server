@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
         unique: true,
     },
     password: String,
+    profile_img: String
 },{timestamps: true});
 
 const userModel = mongoose.model('user', userSchema);
