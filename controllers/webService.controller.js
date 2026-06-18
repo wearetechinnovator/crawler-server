@@ -11,14 +11,17 @@ const propertyModel = require("../models/property.model");
 
 
 
-
 class WebServiceController {
     static async crawl(req, res) {
         const { propertyId, maxPages } = req.body;
+        const data = req.data; // from auth middleware;
 
         if (!propertyId) {
             throw new ApiError(400, "URL is required");
         }
+
+        // Get user data;
+        const userData = await userModel.findOne({ _id: data.id });
 
         // Get Property URL;
         const property = await propertyModel.findOne({ _id: propertyId })
@@ -44,7 +47,6 @@ class WebServiceController {
             chunkOverlap: 300,
             req,
             res,
-            propertyId
         });
 
         const { chunks, count } = await crawler.start();
@@ -54,7 +56,8 @@ class WebServiceController {
         const docs = chunks.map((chunk) => ({
             pageContent: chunk.content,
             metadata: {
-                ...chunk.meta
+                ...chunk.meta,
+                propertyId: propertyId.toString()
             }
         }));
 
@@ -69,7 +72,7 @@ class WebServiceController {
             embeddings,
             {
                 client: Qdrantclient,
-                collectionName: "web-crawler"
+                collectionName: userData.vector_collection_name
             }
         );
 
@@ -87,43 +90,54 @@ class WebServiceController {
         });
     }
 
+
     static async query(req, res) {
-        const { query } = req.body;
+        const { query, propertyId } = req.body;
+        const data = req.data; // from auth middleware;
+
         if (!query) {
             throw new ApiError(400, "Query is required");
         }
+
+        // Get user data;
+        const userData = await userModel.findOne({ _id: data.id });
 
         const embeddings = new HuggingFaceTransformersEmbeddings({
             model: "Xenova/all-MiniLM-L6-v2",
             dtype: "q8"
         });
+
         const vectorStore = await QdrantVectorStore.fromExistingCollection(
             embeddings,
             {
                 client: Qdrantclient,
-                collectionName: "web-crawler"
+                collectionName: userData.vector_collection_name
             }
         );
 
-        const results = await vectorStore.similaritySearch(query, 5);
+        const results = await vectorStore.similaritySearch(query, 5, {
+            must: [
+                {
+                    key: "metadata.propertyId",
+                    match: {
+                        value: propertyId.toString()
+                    }
+                }
+            ]
+        });
 
-        const context = results
-            .map((doc) => doc.pageContent)
-            .join("\n\n");
+        const context = results.map((doc) => doc.pageContent).join("\n\n");
 
         const llm = new ChatGroq({
             apiKey: process.env.GROQ_API_KEY,
             model: "llama-3.1-8b-instant"
         });
 
-        // const response = await llm.invoke([
-        //     ["system", "You are a helpful assistant."],
-        //     ["user", `Based on the following context, answer the question: ${context}\n\nQuestion: ${query}`]
-        // ]);
 
         const response = await llm.invoke([
-            ["system", `
-                You are a helpful AI assistant.
+            [
+                "system",
+                `You are a helpful AI assistant.
 
                 Your primary responsibility is to answer user questions ONLY using the information provided in the Context section.
 
@@ -131,8 +145,7 @@ class WebServiceController {
                 1. Answer questions naturally and conversationally.
                 2. Be friendly and helpful.
                 3. Do NOT use any external knowledge, assumptions, or information not explicitly present in the Context.
-                4. If the answer cannot be found in the Context, respond with:
-                "I couldn't find that information in the available data."
+                4. If the answer cannot be found in the Context, respond with: "I couldn't find that information in the available data."
                 5. Do not make up facts, estimates, or guesses.
                 6. If the user greets you or engages in casual conversation, respond politely, but any factual information must still come only from the Context.
                 7. Keep answers concise and relevant.

@@ -7,7 +7,8 @@ const userSchema = new mongoose.Schema({
         unique: true,
     },
     password: String,
-    profile_img: String
+    profile_img: String,
+    vector_collection_name: String
 },{timestamps: true});
 
 const userModel = mongoose.model('user', userSchema);

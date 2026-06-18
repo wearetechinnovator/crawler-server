@@ -5,6 +5,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const fs = require("node:fs")
 const path = require('node:path');
+const crypto = require("crypto");
+const Qdrantclient = require("../db/qdrant");
 
 
 class UserController {
@@ -28,10 +30,35 @@ class UserController {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const user = await userModel.create({ name, phone, password: hashedPassword });
+
+        // Create Qdrant(vector) Collection;
+        const collectionName = `${name}_${crypto.randomUUID()}`;
+
+        await Qdrantclient.createCollection(collectionName, {
+            vectors: {
+                size: 384,
+                distance: "Cosine"
+            }
+        })
+
+        // Index propertyId for filter data;
+        await Qdrantclient.createPayloadIndex(
+            collectionName,
+            {
+                field_name: "metadata.propertyId",
+                field_schema: "keyword"
+            }
+        );
+
+
+        const user = await userModel.create({ 
+            name, phone, password: hashedPassword,
+            vector_collection_name: collectionName
+        });
         if (!user) {
             throw new ApiError(500, "User creation failed");
         }
+
 
         return res.status(201).json({
             msg: "User created successfully",
@@ -40,14 +67,14 @@ class UserController {
     }
 
     static async updateUser(req, res) {
-        const { name, profile_img } = req.body;
+        const { name, profile_img, removeImg } = req.body;
         const data = req.data; // from auth middleware;
 
         const userData = await userModel.findById(data.id);
         const filePath = path.join(__dirname, "..", "uploads");
         let fileName = userData.profile_img;
 
-        
+
         if (profile_img) {
             // Delete previous image if exists
             if (userData.profile_img) {
@@ -67,13 +94,27 @@ class UserController {
             const buffer = Buffer.from(matches[2], "base64");
 
             // Create new file name
-            fileName = `${Date.now()}.${ext}`;
+            fileName = `DP_${crypto.randomUUID()}_${Date.now()}.${ext}`;
 
             fs.writeFileSync(
                 path.join(filePath, fileName),
                 buffer
             );
         }
+
+        // If user remove profile picture;
+        if (removeImg) {
+            if (userData.profile_img) {
+                const oldFile = path.join(filePath, userData.profile_img);
+
+                if (fs.existsSync(oldFile)) {
+                    fs.unlinkSync(oldFile);
+                }
+            }
+
+            fileName = '';
+        }
+
 
 
         const updatedUser = await userModel.updateOne({ _id: data.id }, {
@@ -90,7 +131,10 @@ class UserController {
 
         return res.status(200).json({
             msg: "User updated successfully",
-            data: updatedUser
+            data: {
+                name: name,
+                profile_img: fileName
+            }
         });
 
     }

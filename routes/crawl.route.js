@@ -5,11 +5,11 @@ const authMiddleware = require("../middlewares/auth.middleware");
 
 router
     .route("/crawl")
-    .post(WebServiceController.crawl);
+    .post(authMiddleware, WebServiceController.crawl);
 
 router
     .route("/query")
-    .post(WebServiceController.query);
+    .post(authMiddleware, WebServiceController.query);
 
 
 module.exports = router;

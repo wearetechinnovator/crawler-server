@@ -111,42 +111,27 @@ class Crawler {
     }
 
     chunkText(text, url) {
-        const cleanText = text
-            .replace(/\s+/g, " ")
-            .trim();
-
+        const cleanText = text.replace(/\s+/g, " ").trim();
         const chunks = [];
-
         let start = 0;
 
         while (start < cleanText.length) {
-            const end =
-                start + this.chunkSize;
+            const end = start + this.chunkSize;
 
-            const content =
-                cleanText.slice(
-                    start,
-                    end
-                );
+            const content = cleanText.slice(start, end);
 
             chunks.push({
                 id: crypto.randomUUID(),
-
                 content,
-
                 meta: {
                     url,
                     host: this.host,
-                    chunkIndex:
-                        chunks.length,
-                    crawledAt:
-                        new Date().toISOString()
+                    chunkIndex: chunks.length,
+                    crawledAt: new Date().toISOString()
                 }
             });
 
-            start +=
-                this.chunkSize -
-                this.chunkOverlap;
+            start += this.chunkSize - this.chunkOverlap;
         }
 
         return chunks;
@@ -179,10 +164,7 @@ class Crawler {
             return;
         }
 
-        if (
-            this.visited.size >=
-            this.maxPages
-        ) {
+        if (this.visited.size >= this.maxPages) {
             return;
         }
 
@@ -193,53 +175,32 @@ class Crawler {
             url
         );
 
-        const page =
-            await this.context.newPage();
+        const page = await this.context.newPage();
 
         try {
             await page.goto(url, {
-                waitUntil:
-                    "domcontentloaded",
+                waitUntil: "domcontentloaded",
                 timeout: 30000
             });
 
-            await this.autoScroll(
-                page
-            );
+            await this.autoScroll(page);
 
-            const html =
-                await page.content();
+            const html = await page.content();
 
-            const text =
-                this.extractText(
-                    html
-                );
+            const text = this.extractText(html);
 
             if (text) {
-                const pageChunks =
-                    this.chunkText(
-                        text,
-                        url
-                    );
-
+                const pageChunks = this.chunkText(text, url);
                 this.finalChunks.push(
                     ...pageChunks
                 );
             }
 
-            const links =
-                await page.$$eval(
-                    "a",
-                    (elements) =>
-                        elements
-                            .map(
-                                (a) =>
-                                    a.href
-                            )
-                            .filter(
-                                Boolean
-                            )
-                );
+            const links = await page.$$eval("a", (elements) => elements.map(
+                (a) => a.href).filter(
+                    Boolean
+                )
+            );
 
             for (const link of links) {
                 const normalized =
@@ -286,19 +247,13 @@ class Crawler {
 
             await this.queue.onIdle();
 
-            console.log(
-                `Crawled ${this.visited.size} pages`
-            );
+            console.log(`Crawled ${this.visited.size} pages`);
 
-            console.log(
-                `Generated ${this.finalChunks.length} chunks`
-            );
+            console.log(`Generated ${this.finalChunks.length} chunks`);
 
             return {
-                chunks:
-                    this.finalChunks,
-                count:
-                    this.visited.size
+                chunks: this.finalChunks,
+                count: this.visited.size
             };
         } finally {
             await this.close();

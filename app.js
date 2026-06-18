@@ -13,8 +13,7 @@ app.use("/public", express.static(path.join(__dirname, "uploads")));
 
 
 app.use("/api/v1", routes);
-// For testing purpose
-app.get("/ping", (req, res) => { res.json({ data: "PONG" }); })
+app.get("/ping", (req, res) => { res.json({ data: "PONG" }); }) //For testing purpose
 app.use(errorMiddleware);
 
 
