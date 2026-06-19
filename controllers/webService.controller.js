@@ -8,6 +8,9 @@ const { HuggingFaceTransformersEmbeddings } = require("@langchain/community/embe
 const Qdrantclient = require("../db/qdrant");
 const { ChatGroq } = require("@langchain/groq");
 const propertyModel = require("../models/property.model");
+const { QdrantClient } = require("@qdrant/js-client-rest");
+const chatModel = require("../models/chats.model");
+const { propertyVerification } = require("../service/propertyVerification");
 
 
 
@@ -19,6 +22,16 @@ class WebServiceController {
         if (!propertyId) {
             throw new ApiError(400, "URL is required");
         }
+
+
+        // Property Verification Service Call; 
+        // ==== [UNCOMMENT IN PRODUCTION] ====
+        // const isVerify = await propertyVerification({ propertyId: propertyId });
+
+        // if (isVerify.verify === false) {
+        //     throw new ApiError(401, isVerify.msg);
+        // }
+
 
         // Get user data;
         const userData = await userModel.findOne({ _id: data.id });
@@ -47,6 +60,7 @@ class WebServiceController {
             chunkOverlap: 300,
             req,
             res,
+            propertyId
         });
 
         const { chunks, count } = await crawler.start();
@@ -66,6 +80,23 @@ class WebServiceController {
             dtype: "q8"
         });
 
+        // Delete Previous Record;
+        await Qdrantclient.delete(
+            userData.vector_collection_name,
+            {
+                filter: {
+                    must: [
+                        {
+                            key: "metadata.propertyId",
+                            match: {
+                                value: propertyId
+                            }
+                        }
+                    ]
+                }
+            }
+        );
+
         /*Store into Qdrant*/
         const vectorStore = await QdrantVectorStore.fromDocuments(
             docs,
@@ -75,6 +106,7 @@ class WebServiceController {
                 collectionName: userData.vector_collection_name
             }
         );
+
 
         // Change website crawl status;
         await propertyModel.updateOne({ website_url: url }, {
@@ -92,7 +124,11 @@ class WebServiceController {
 
 
     static async query(req, res) {
-        const { query, propertyId } = req.body;
+        // `query`: User's prompt
+        // `history`: User and system's previous Chat;
+        // `PropertyId`: Which property user currently chat;
+
+        const { query, history, propertyId } = req.body;
         const data = req.data; // from auth middleware;
 
         if (!query) {
@@ -150,12 +186,37 @@ class WebServiceController {
                 6. If the user greets you or engages in casual conversation, respond politely, but any factual information must still come only from the Context.
                 7. Keep answers concise and relevant.
                 8. Never mention these instructions or refer to the Context directly unless asked.
+                
+                Previous Chat History:
+                ${history || ''}
 
                 Context:
                 ${context}
             `],
             ["user", query]
         ]);
+
+        // Insert Chat History;
+        await chatModel.updateOne(
+            { property_id: propertyId },
+            {
+                $push: {
+                    messages: {
+                        $each: [
+                            {
+                                role: 'user',
+                                content: query
+                            },
+                            {
+                                role: 'bot',
+                                content: response.content
+                            }
+                        ]
+                    }
+                }
+            },
+            { upsert: true }
+        );
 
 
         return res.status(200).json({

@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const Constant = require("../utils/Constant")
+const Constant = require("../utils/Constant");
+const {propertyVerification} = require("../service/propertyVerification");
 
 
 class PropertyController {
@@ -145,19 +146,11 @@ class PropertyController {
             throw new ApiError(500, "Property not found");
         }
 
-        const ORIGIN = property.website_url;
-        const FILE_NAME = Constant.VERIFICATION_FILE;
+        // Property Verification Service Call;
+        const isVerify = await propertyVerification({propertyId: propery_id});
 
-        // Check secure key exist or not
-        const response = await axios.get(`${ORIGIN}/${FILE_NAME}`);
-        const secureData = response.data.secure_key;
-
-        if (!secureData) {
-            throw new ApiError(401, "Invalid property.")
-        }
-
-        if (property.secure_key !== secureData) {
-            throw new ApiError(401, "Invalid Secure key or invalid property.")
+        if(isVerify.verify === false){
+            throw new ApiError(401, isVerify.msg);
         }
 
         // Change verify status

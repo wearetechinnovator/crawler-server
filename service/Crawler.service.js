@@ -28,6 +28,8 @@ class Crawler {
 
         this.browser = null;
         this.context = null;
+
+        this.siteInfoSend = false;
     }
 
     async init() {
@@ -157,10 +159,20 @@ class Crawler {
         }
     }
 
+    sendViaSocket({ propertyId, name, data }) {
+        try {
+            const io = getIO();
+            io.to(`crawl:${propertyId}`).emit(name, data);
+        } catch (err) {
+            console.error(
+                "Socket Error:",
+                err.message
+            );
+        }
+    }
+
     async crawlPage(url) {
-        if (
-            this.visited.has(url)
-        ) {
+        if (this.visited.has(url)) {
             return;
         }
 
@@ -177,11 +189,39 @@ class Crawler {
 
         const page = await this.context.newPage();
 
+
         try {
             await page.goto(url, {
                 waitUntil: "domcontentloaded",
                 timeout: 30000
             });
+
+
+            const title = await page.title();
+            const favicon = await page.evaluate(() => {
+                const icon =
+                    document.querySelector('link[rel="icon"]') ||
+                    document.querySelector('link[rel="shortcut icon"]') ||
+                    document.querySelector('link[rel*="icon"]');
+
+                return icon?.href || null;
+            });
+
+            if (!this.siteInfoSend) {
+                this.sendViaSocket({
+                    propertyId: this.propertyId,
+                    name: "siteInfo",
+                    data: {
+                        title, favicon
+                    }
+                })
+
+                this.siteInfoSend = true;
+            }
+
+
+            console.log("Page title", title);
+            console.log("Page favicon", favicon);
 
             await this.autoScroll(page);
 
@@ -196,32 +236,15 @@ class Crawler {
                 );
             }
 
-            const links = await page.$$eval("a", (elements) => elements.map(
-                (a) => a.href).filter(
-                    Boolean
-                )
-            );
+            const links = await page.$$eval("a", (elements) => elements.map((a) => a.href).filter(Boolean));
 
             for (const link of links) {
-                const normalized =
-                    this.normalizeUrl(
-                        link
-                    );
-
-                if (
-                    normalized &&
-                    this.isValidUrl(
-                        normalized
-                    ) &&
-                    !this.visited.has(
-                        normalized
-                    )
-                ) {
-                    this.queue.add(
-                        () =>
-                            this.crawlPage(
-                                normalized
-                            )
+                const normalized = this.normalizeUrl(link);
+                if (normalized && this.isValidUrl(normalized) && !this.visited.has(normalized)) {
+                    this.queue.add(() =>
+                        this.crawlPage(
+                            normalized
+                        )
                     );
                 }
             }
@@ -256,6 +279,7 @@ class Crawler {
                 count: this.visited.size
             };
         } finally {
+            this.siteInfoSend = false; //For send site info data via Socket;
             await this.close();
         }
     }
