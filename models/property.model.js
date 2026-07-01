@@ -15,6 +15,10 @@ const propertySchema = new mongoose.Schema({
         default: 0
     },
     secure_key: String,
+    public_key: {
+        type: String,
+        index: true
+    },
     is_crawled: {
         enum: ['pending', 'crawling', 'crawled', 'failed'],
         type: String,

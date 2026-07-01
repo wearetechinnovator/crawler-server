@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const Constant = require("../utils/Constant");
-const {propertyVerification} = require("../service/propertyVerification");
+const { propertyVerification } = require("../service/propertyVerification");
 
 
 class PropertyController {
@@ -33,11 +33,15 @@ class PropertyController {
         // Generate a secure key for the property
         const secure_key = crypto.randomBytes(24).toString('hex');
 
+        // Generate public key for bot
+        const public_key = crypto.randomBytes(20).toString('hex');
+
         const property = await propertyModel.create({
             user_id: data.id,
             name,
             website_url: url.origin,
-            secure_key
+            secure_key,
+            public_key
         });
 
         if (!property) {
@@ -56,7 +60,7 @@ class PropertyController {
 
         const properties = await propertyModel.findOne({
             user_id: data.id, _id: id, is_del: false
-        });
+        }, { secure_key: 0 });
         if (!properties) {
             throw new ApiError(404, "Properties not found");
         }
@@ -70,7 +74,7 @@ class PropertyController {
     static async getAllProperties(req, res) {
         const data = req.data; // from auth middleware;
 
-        const properties = await propertyModel.find({ user_id: data.id, is_del: false });
+        const properties = await propertyModel.find({ user_id: data.id, is_del: false }, { secure_key: 0 });
         if (!properties) {
             throw new ApiError(404, "Properties not found");
         }
@@ -147,9 +151,9 @@ class PropertyController {
         }
 
         // Property Verification Service Call;
-        const isVerify = await propertyVerification({propertyId: propery_id});
+        const isVerify = await propertyVerification({ propertyId: propery_id });
 
-        if(isVerify.verify === false){
+        if (isVerify.verify === false) {
             throw new ApiError(401, isVerify.msg);
         }
 
@@ -177,11 +181,38 @@ class PropertyController {
             }
         })
 
-        if(updateProperty.modifiedCount === 0){
+        if (updateProperty.modifiedCount === 0) {
             throw new ApiError(500, "Property not update");
         }
 
-        return res.status(200).json({msg: 'Property update successfully'});
+        return res.status(200).json({ msg: 'Property update successfully' });
+    }
+
+    static async rotateApiKey(req, res) {
+        const { propertyId } = req.body;
+
+        if (!propertyId) {
+            throw new ApiError(400, "Property id is required.");
+        }
+
+        // Generate new public key for bot
+        const public_key = crypto.randomBytes(20).toString('hex');
+
+        const updateProperty = await propertyModel.updateOne({ _id: propertyId }, {
+            $set: {
+                public_key
+            }
+        })
+
+        if (updateProperty.modifiedCount === 0) {
+            throw new ApiError(500, "Key rotation failed");
+        }
+
+        return res.status(200).json({
+            msg: 'API Key rotate successfully',
+            key: public_key
+        });
+
     }
 }
 

@@ -11,5 +11,9 @@ router
     .route("/query")
     .post(authMiddleware, WebServiceController.query);
 
+router
+    .route("/query-bot")
+    .post(WebServiceController.queryBot);
+
 
 module.exports = router;

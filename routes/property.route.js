@@ -32,5 +32,9 @@ router
     .route("/update-property")
     .patch(authMiddleware, PropertyController.updateProperty);
 
+router
+    .route("/rotate-key")
+    .patch(authMiddleware, PropertyController.rotateApiKey);
+
 
 module.exports = router;
