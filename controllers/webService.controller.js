@@ -128,7 +128,7 @@ class WebServiceController {
         const data = req.data; // from auth middleware
 
         if (!query) {
-            throw new ApiError(400, "Query is required");
+            throw new ApiError(400, "Query is required.");
         }
 
         const userData = await userModel.findOne({ _id: data.id });
