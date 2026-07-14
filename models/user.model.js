@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema({
     phone: {
         type: Number,
         unique: true,
+        index: true
     },
     password: String,
     profile_img: String,
