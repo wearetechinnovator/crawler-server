@@ -16,6 +16,8 @@ const { createAgent } = require("langchain");
 const { tool } = require("@langchain/core/tools");
 const { z } = require('zod');
 const { createFolderTool } = require("../tools/createFolder");
+const webhookModel = require("../models/webhook.model");
+const { generateTools } = require("../tools/generateTools");
 
 
 
@@ -160,15 +162,17 @@ class WebServiceController {
 
         const context = results.map((doc) => doc.pageContent).join("\n\n");
 
+        // Get Dynamic Tools
+        const toolsArr = await generateTools({propertyId: propertyId});
+
         const llm = new ChatGroq({
-            // model: "qwen/qwen3-32b",
             model: "openai/gpt-oss-20b",
             apiKey: process.env.GROQ_API_KEY,
         });
 
         const agent = createAgent({
             model: llm,
-            tools: [createFolderTool]
+            tools: [...toolsArr]
         })
 
         const response = await agent.invoke({
@@ -254,7 +258,7 @@ class WebServiceController {
         // );
 
         // const botReply = nvidiaResponse.data.choices[0].message.content;
-        
+
         const botReply = finalMessage.content;
 
         await chatModel.updateOne(

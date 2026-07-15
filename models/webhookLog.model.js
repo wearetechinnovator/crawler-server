@@ -14,14 +14,13 @@ const webhookLogSchema = new mongoose.Schema({
     },
     webhook_id:{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'webhook',
+        ref: 'webhooks',
         required: true,
         index: true
     },
-    status: String,
-    response: String,
-    timestamp: String,
-    full_log: String
+    status: Boolean,
+    status_code: Number,
+    response: String
 }, { timestamps: true });
 
 const webhookLogModel = new mongoose.model("webhook_log", webhookLogSchema);

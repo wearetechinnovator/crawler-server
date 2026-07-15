@@ -1,4 +1,5 @@
 const webhookModel = require("../models/webhook.model");
+const webhookLogModel = require("../models/webhookLog.model");
 const ApiError = require("../utils/ApiError");
 
 
@@ -12,7 +13,7 @@ class WebHookController {
 
         const data = req.data; // from auth middleware;
 
-        if ([webhook_name, webhook_url, secret_token, signature_header_name]
+        if ([webhook_name, webhook_url, signature_header_name]
             .some((field) => !field || field === "")) {
             throw new ApiError(400, "required fields are empty");
         }
@@ -56,7 +57,7 @@ class WebHookController {
 
         const data = req.data; // from auth middleware;
 
-        if ([id, webhook_name, webhook_url, secret_token, signature_header_name]
+        if ([id, webhook_name, webhook_url, signature_header_name]
             .some((field) => !field || field === "")) {
             throw new ApiError(400, "required fields are empty");
         }
@@ -105,7 +106,7 @@ class WebHookController {
         const webhooks = await webhookModel.find({
             property_id: propertyId,
             is_del: false
-        }).sort({_id: -1})
+        }).sort({ _id: -1 })
 
         return res.status(200).json({ data: webhooks });
 
@@ -148,6 +149,32 @@ class WebHookController {
         return res.status(200).json({
             msg: "Webhook delete successfully"
         });
+    }
+
+    static async getAllLog(req, res) {
+        const { propertyId } = req.query;
+        const page = req.query?.page || 1;
+        const limit = req.query?.limit || 10;
+        const skip = (Number(page) - 1) * Number(limit);
+
+        const data = req.data; // from auth middleware;
+
+
+        if (!propertyId) {
+            throw new ApiError(401, "Property id is required.")
+        }
+
+        const logs = await webhookLogModel.find({
+            user_id: data.id,
+            property_id: propertyId,
+        })
+            .populate('webhook_id')
+            .skip(skip)
+            .limit(limit)
+            .sort({ _id: -1 })
+
+
+        return res.status(200).json({ data: logs });
     }
 }
 

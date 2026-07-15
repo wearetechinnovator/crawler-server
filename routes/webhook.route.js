@@ -24,5 +24,9 @@ router
     .route("/update-hook")
     .patch(authMiddleware, WebhhookController.updateHook);
 
+router
+    .route("/get-logs")
+    .get(authMiddleware, WebhhookController.getAllLog);
+
 
 module.exports = router;

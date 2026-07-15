@@ -14,7 +14,10 @@ const webhookSchema = new mongoose.Schema({
     },
     webhook_name: String,
     description: String,
-    status: String,
+    status: {
+        type: String,
+        default: 'true'
+    },
     webhook_url: String,
     http_method: {
         type: String,
@@ -26,7 +29,10 @@ const webhookSchema = new mongoose.Schema({
         enum: ['json', 'form_data'],
         default: 'json'
     },
-    authentication_type: String,
+    authentication_type: {
+        type: String,
+        enum: ['signature', 'bearer_token', 'none']
+    },
     secret_token: String,
     signature_header_name: String,
     payload: [
