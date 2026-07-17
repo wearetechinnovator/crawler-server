@@ -176,6 +176,61 @@ class WebHookController {
 
         return res.status(200).json({ data: logs });
     }
+
+    static async webhookReport(req, res) {
+        const { propertyId } = req.query;
+        const data = req.data; // from auth middleware;
+
+        if (!propertyId) {
+            throw new ApiError(401, "Property id is required.")
+        }
+
+        /**
+       * Report::
+       * 1. Total Active Hooks
+       * 2. Total Delivery
+       * 3. Total Successfully Delivery
+       * 4. Fail Delivery
+       */
+
+        // Get All Active Webhooks;
+        const hooks = await webhookModel.find({
+            property_id: propertyId,
+            status: 'true'
+        })
+
+        // Get all logs
+        const hookLogs = await webhookLogModel.find({
+            property_id: propertyId
+        })
+
+
+        let { totalDelivery, successDelivery, failDelivery } = hookLogs.reduce((acc, i) => {
+            if (i.status) acc.successDelivery += 1;
+            if (!i.status) acc.failDelivery += 1;
+            acc.totalDelivery += 1;
+
+            return acc;
+        }, { totalDelivery: 0, successDelivery: 0, failDelivery: 0 })
+
+
+        let activeHooks = hooks.length;
+
+        let successPercentage = (successDelivery / totalDelivery) * 100;
+        let failPercentage = (failDelivery / totalDelivery) * 100;
+
+
+        
+        return res.status(200).json({
+            totalDelivery,
+            successDelivery,
+            failDelivery,
+            activeHooks,
+            successPercentage,
+            failPercentage
+        });
+
+    }
 }
 
 

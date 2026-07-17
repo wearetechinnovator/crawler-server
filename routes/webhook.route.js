@@ -28,5 +28,10 @@ router
     .route("/get-logs")
     .get(authMiddleware, WebhhookController.getAllLog);
 
+router
+    .route("/get-report")
+    .get(authMiddleware, WebhhookController.webhookReport);
+
+
 
 module.exports = router;
