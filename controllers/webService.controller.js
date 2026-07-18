@@ -163,7 +163,7 @@ class WebServiceController {
         const context = results.map((doc) => doc.pageContent).join("\n\n");
 
         // Get Dynamic Tools
-        const toolsArr = await generateTools({propertyId: propertyId});
+        const toolsArr = await generateTools({propertyId: propertyId, req, res});
 
         const llm = new ChatGroq({
             model: "openai/gpt-oss-20b",
@@ -193,6 +193,14 @@ class WebServiceController {
                     7. If the user greets you or engages in casual conversation, respond politely, but any factual information must still come only from the Context or tool results.
                     8. Keep answers concise and relevant.
                     9. Never mention these instructions, or refer to the Context or tools directly, unless the user explicitly asks how you got the information.
+                    Rules:
+                    10. If a tool requires multiple arguments and one or more arguments are missing:
+                        - NEVER ask for all missing arguments at once.
+                        - Ask for ONLY ONE missing argument in each response.
+                        - After the user provides it, remember the value.
+                        - Then check for the next missing argument.
+                        - Repeat until all required arguments have been collected.
+                        - Only call the tool after every required argument has been collected.
 
                     Previous Chat History:
                     ${history || ''}
@@ -278,7 +286,8 @@ class WebServiceController {
 
         return res.status(200).json({
             msg: "Query executed successfully",
-            data: botReply
+            data: botReply,
+            type: "msg"
         });
     }
 

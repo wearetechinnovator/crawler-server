@@ -33,20 +33,29 @@ const webhookSchema = new mongoose.Schema({
         type: String,
         enum: ['signature', 'bearer_token', 'none']
     },
+    form_flow:{
+        type: String,
+        // `0` for One Question at a Time 
+        // `1` Show Entire Form
+        enum: ['0', '1'] ,
+        default: '1'
+    },
     secret_token: String,
     signature_header_name: String,
     payload: [
         {
             field_name: String,
+            field_label: String,
             type: {
                 type: String,
-                default: 'string'
+                default: 'text'
             },
             is_required: {
                 type: String,
                 default: 'no'
             },
-            default: String,
+            placeholder: String,
+            set_of_value: [String]
         }
     ],
     header: [

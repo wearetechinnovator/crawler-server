@@ -2,9 +2,10 @@ const { z } = require('zod');
 const { tool } = require("@langchain/core/tools");
 const webhookModel = require("../models/webhook.model");
 const { executeWebhook } = require("../service/executeWebhooks");
+const { sendDataToFrontEnd } = require("../utils/sendDatatoFrontEnd")
 
 
-const generateTools = async ({ propertyId }) => {
+const generateTools = async ({ propertyId, req, res }) => {
     // Build dynamic Schema
     function buildZodSchema(payload) {
         const shape = {};
@@ -58,18 +59,21 @@ const generateTools = async ({ propertyId }) => {
         const schema = buildZodSchema(hook.payload);
 
         return tool(
-            async (input) => {
-                let res = await executeWebhook({
-                    hook,
-                    inputs: input,
-                });
+            async () => {
+                console.log(hook);
+                // let res = await executeWebhook({
+                //     hook,
+                //     inputs: input,
+                // });
 
-                return res;
+                sendDataToFrontEnd({ hookData: hook, req, res });
+
+                return "Form Generating..";
             },
             {
                 name: hook.webhook_name.replace(/\s+/g, ""),
                 description: hook.description,
-                schema
+                schema: z.object({})
             }
         )
     })

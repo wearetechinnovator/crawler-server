@@ -1,6 +1,8 @@
 const webhookModel = require("../models/webhook.model");
 const webhookLogModel = require("../models/webhookLog.model");
 const ApiError = require("../utils/ApiError");
+const axios = require("axios");
+const eventEmitter = require('../events/event');
 
 
 class WebHookController {
@@ -8,7 +10,7 @@ class WebHookController {
         const {
             webhook_name, description, status, webhook_url, http_method, payload_format,
             authentication_type, secret_token, signature_header_name, payload, header,
-            propertyId
+            propertyId, form_flow
         } = req.body;
 
         const data = req.data; // from auth middleware;
@@ -35,7 +37,7 @@ class WebHookController {
         const insert = await webhookModel.create({
             user_id: data.id, property_id: propertyId,
             webhook_name, description, status, webhook_url, http_method, payload_format,
-            authentication_type, secret_token, signature_header_name, payload, header
+            authentication_type, secret_token, signature_header_name, payload, header, form_flow
         })
 
         if (!insert) {
@@ -52,7 +54,7 @@ class WebHookController {
         const {
             webhook_name, description, status, webhook_url, http_method, payload_format,
             authentication_type, secret_token, signature_header_name, payload, header,
-            id
+            id, form_flow
         } = req.body;
 
         const data = req.data; // from auth middleware;
@@ -84,7 +86,7 @@ class WebHookController {
         const update = await webhookModel.updateOne({ _id: id }, {
             $set: {
                 webhook_name, description, status, webhook_url, http_method, payload_format,
-                authentication_type, secret_token, signature_header_name, payload, header
+                authentication_type, secret_token, signature_header_name, payload, header, form_flow
             }
         })
 
@@ -220,7 +222,7 @@ class WebHookController {
         let failPercentage = (failDelivery / totalDelivery) * 100;
 
 
-        
+
         return res.status(200).json({
             totalDelivery,
             successDelivery,
@@ -230,6 +232,89 @@ class WebHookController {
             failPercentage
         });
 
+    }
+
+    static async callWebhook(req, res) {
+        const { hook, result } = req.body;
+
+        try {
+            let headers = {};
+            let body;
+
+            if (hook.payload_format === "json") {
+                headers["Content-Type"] = "application/json";
+                body = {};
+            }
+            else if (hook.payload_format === "form_data") {
+                body = new FormData();
+            }
+
+
+            //Authentication
+            if (hook.authentication_type === "bearer_token") {
+                headers["Authorization"] = `Bearer ${hook.secret_token}`;
+            }
+
+            if (hook.authentication_type === "signature") {
+                headers[hook.signature_header_name] = hook.secret_token;
+            }
+
+            // Attach Fields;
+            for (const field of hook.payload) {
+                let value;
+                if (result[field.field_name] !== undefined) {
+                    value = result[field.field_name];
+                } else {
+                    value = field.default;
+                }
+
+                if (hook.payload_format === "json") {
+                    body[field.field_name] = value;
+                } else if (hook.payload_format === "form_data") {
+                    body.append(field.field_name, value);
+                }
+            }
+
+
+            // Attach Extranal headers;
+            if (hook.header.length > 0) {
+                let extraHeader = {};
+
+                hook.header.forEach((h, _) => {
+                    extraHeader[h.header_name] = h.header_value
+                })
+
+                headers = { ...headers, ...extraHeader }
+            }
+
+            const response = await axios({
+                url: hook.webhook_url,
+                method: hook.http_method,
+                headers,
+                data: body,
+                validateStatus: () => true
+            });
+
+            eventEmitter.emit("webhook.executed", {
+                hook,
+                response
+            })
+
+
+            if (response.status < 200 || response.status >= 300) {
+                return {
+                    success: false,
+                    status: response.status,
+                    message: response.data?.message || response.statusText || "Request failed",
+                };
+            }
+
+
+            return res.status(200).json({ data: response.data })
+
+        } catch (err) {
+            return res.status(500).json({ err: "Something went wrong" })
+        }
     }
 }
 

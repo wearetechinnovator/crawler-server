@@ -32,6 +32,10 @@ router
     .route("/get-report")
     .get(authMiddleware, WebhhookController.webhookReport);
 
+router
+    .route("/call-hook")
+    .post(authMiddleware, WebhhookController.callWebhook);
+
 
 
 module.exports = router;
