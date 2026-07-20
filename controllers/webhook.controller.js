@@ -10,7 +10,7 @@ class WebHookController {
         const {
             webhook_name, description, status, webhook_url, http_method, payload_format,
             authentication_type, secret_token, signature_header_name, payload, header,
-            propertyId, form_flow
+            propertyId, form_flow, file_type, file_size, min_date, max_date, max_len, min_len
         } = req.body;
 
         const data = req.data; // from auth middleware;
@@ -54,7 +54,7 @@ class WebHookController {
         const {
             webhook_name, description, status, webhook_url, http_method, payload_format,
             authentication_type, secret_token, signature_header_name, payload, header,
-            id, form_flow
+            id, form_flow, file_type, file_size, min_date, max_date, max_len, min_len
         } = req.body;
 
         const data = req.data; // from auth middleware;
@@ -228,8 +228,8 @@ class WebHookController {
             successDelivery,
             failDelivery,
             activeHooks,
-            successPercentage,
-            failPercentage
+            successPercentage: Math.ceil(successPercentage),
+            failPercentage: Math.ceil(failPercentage)
         });
 
     }
@@ -240,6 +240,31 @@ class WebHookController {
         try {
             let headers = {};
             let body;
+            const payload = hook.payload || [];
+
+
+            // ===================[Validation]==================
+            // =================================================
+            if (!payload || payload.length < 1) {
+                return res.status(422).json({ err: "Invalid data" });
+            }
+
+            // *Required check;
+            const requiredFields = payload.filter(p => p.is_required === 'yes');
+
+            for (let f of requiredFields) {
+                if (result[f.field_name] === "" || !result[f.field_name]) {
+                    return res.status(422).json({ err: `${f.field_name} is required` });
+                }
+            }
+
+            // *Min and Max check;
+            // for(let p of payload){
+                
+            // }
+
+
+
 
             if (hook.payload_format === "json") {
                 headers["Content-Type"] = "application/json";
@@ -316,6 +341,7 @@ class WebHookController {
             return res.status(500).json({ err: "Something went wrong" })
         }
     }
+
 }
 
 

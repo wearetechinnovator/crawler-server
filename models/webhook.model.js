@@ -55,7 +55,13 @@ const webhookSchema = new mongoose.Schema({
                 default: 'no'
             },
             placeholder: String,
-            set_of_value: [String]
+            set_of_value: [String],
+            file_type: String,
+            file_size: Number,
+            min_date: Date,
+            max_date: Date,
+            max_len: Number,
+            min_len: Number
         }
     ],
     header: [

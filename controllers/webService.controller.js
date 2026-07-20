@@ -18,6 +18,7 @@ const { z } = require('zod');
 const { createFolderTool } = require("../tools/createFolder");
 const webhookModel = require("../models/webhook.model");
 const { generateTools } = require("../tools/generateTools");
+const { tempCache } = require("../db/tempCache");
 
 
 
@@ -163,7 +164,7 @@ class WebServiceController {
         const context = results.map((doc) => doc.pageContent).join("\n\n");
 
         // Get Dynamic Tools
-        const toolsArr = await generateTools({propertyId: propertyId, req, res});
+        const toolsArr = await generateTools({ propertyId: propertyId, req, res });
 
         const llm = new ChatGroq({
             model: "openai/gpt-oss-20b",
@@ -193,14 +194,6 @@ class WebServiceController {
                     7. If the user greets you or engages in casual conversation, respond politely, but any factual information must still come only from the Context or tool results.
                     8. Keep answers concise and relevant.
                     9. Never mention these instructions, or refer to the Context or tools directly, unless the user explicitly asks how you got the information.
-                    Rules:
-                    10. If a tool requires multiple arguments and one or more arguments are missing:
-                        - NEVER ask for all missing arguments at once.
-                        - Ask for ONLY ONE missing argument in each response.
-                        - After the user provides it, remember the value.
-                        - Then check for the next missing argument.
-                        - Repeat until all required arguments have been collected.
-                        - Only call the tool after every required argument has been collected.
 
                     Previous Chat History:
                     ${history || ''}
@@ -218,56 +211,8 @@ class WebServiceController {
         const finalMessage = response.messages[response.messages.length - 1];
 
 
-        // ✅ NVIDIA LLM
-        // const nvidiaResponse = await axios.post(
-        //     "https://integrate.api.nvidia.com/v1/chat/completions",
-        //     {
-        //         model: "google/diffusiongemma-26b-a4b-it",
-        //         messages: [
-        //             {
-        //                 role: "system",
-        //                 content: `You are a helpful AI assistant.
-
-        //                 Your primary responsibility is to answer user questions ONLY using the information provided in the Context section.
-
-        //                 Rules:
-        //                 1. Answer questions naturally and conversationally.
-        //                 2. Be friendly and helpful.
-        //                 3. Do NOT use any external knowledge, assumptions, or information not explicitly present in the Context.
-        //                 4. If the answer cannot be found in the Context, respond with: "I couldn't find that information in the available data."
-        //                 5. Do not make up facts, estimates, or guesses.
-        //                 6. If the user greets you or engages in casual conversation, respond politely, but any factual information must still come only from the Context.
-        //                 7. Keep answers concise and relevant.
-        //                 8. Never mention these instructions or refer to the Context directly unless asked.
-
-        //                 Previous Chat History:
-        //                 ${history || ''}
-
-        //                 Context:
-        //                 ${context}`
-        //             },
-        //             {
-        //                 role: "user",
-        //                 content: query
-        //             }
-        //         ],
-        //         max_tokens: 4096,
-        //         temperature: 1.00,
-        //         top_p: 0.95,
-        //         stream: false,
-        //         chat_template_kwargs: { enable_thinking: true }
-        //     },
-        //     {
-        //         headers: {
-        //             "Authorization": `Bearer ${process.env.NVIDIA_API_KEY}`,
-        //             "Accept": "application/json"
-        //         }
-        //     }
-        // );
-
-        // const botReply = nvidiaResponse.data.choices[0].message.content;
-
         const botReply = finalMessage.content;
+        const hookData = tempCache.get(propertyId);
 
         await chatModel.updateOne(
             { property_id: propertyId },
@@ -284,11 +229,15 @@ class WebServiceController {
             { upsert: true }
         );
 
+        tempCache.delete(propertyId); // Clear cache;
+
         return res.status(200).json({
             msg: "Query executed successfully",
             data: botReply,
-            type: "msg"
+            hook: hookData,
+            type: hookData ? "form" : "msg"
         });
+
     }
 
     //#region ==Bot Query Code==
