@@ -3,6 +3,7 @@ const webhookLogModel = require("../models/webhookLog.model");
 const ApiError = require("../utils/ApiError");
 const axios = require("axios");
 const eventEmitter = require('../events/event');
+const { fileTypeFromBuffer } = require("file-type")
 
 
 class WebHookController {
@@ -243,27 +244,190 @@ class WebHookController {
             const payload = hook.payload || [];
 
 
-            // ===================[Validation]==================
-            // =================================================
+            // #region ----Hook validation----
             if (!payload || payload.length < 1) {
                 return res.status(422).json({ err: "Invalid data" });
             }
 
-            // *Required check;
-            const requiredFields = payload.filter(p => p.is_required === 'yes');
+            for (const f of payload) {
+                const value = result[f.field_name];
 
-            for (let f of requiredFields) {
-                if (result[f.field_name] === "" || !result[f.field_name]) {
-                    return res.status(422).json({ err: `${f.field_name} is required` });
+                // Required validation
+                if (f.is_required === "yes") {
+                    const isEmpty = value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+                    if (isEmpty) {
+                        return res.status(422).json({ err: `${f.field_label} is required` });
+                    }
+                }
+
+                // Skip remaining validation if field is empty and not required
+                if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+                    continue;
+                }
+
+                switch (f.type) {
+                    case "text":
+                    case "number":
+                        if (f.max_len && String(value).length > Number(f.max_len)) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must not exceed ${f.max_len} characters`
+                            });
+                        }
+
+                        if (f.min_len && String(value).length < Number(f.min_len)) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must be at least ${f.min_len} characters`
+                            });
+                        }
+
+                        break;
+
+                    case "date": {
+                        const d = new Date(value);
+
+                        if (f.min_date && d < new Date(f.min_date)) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must be after ${f.min_date}`
+                            });
+                        }
+
+                        if (f.max_date && d > new Date(f.max_date)) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must be before ${f.max_date}`
+                            });
+                        }
+
+                        break;
+                    }
+
+                    case "date-time": {
+                        const dt = new Date(value);
+
+                        if (f.min_date && dt < new Date(f.min_date)) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must be after ${f.min_date}`
+                            });
+                        }
+
+                        if (f.max_date && dt > new Date(f.max_date)) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must be before ${f.max_date}`
+                            });
+                        }
+
+                        break;
+                    }
+
+                    case "time":
+                        if (f.min_time && value < f.min_time) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must be after ${f.min_time}`
+                            });
+                        }
+
+                        if (f.max_time && value > f.max_time) {
+                            return res.status(422).json({
+                                err: `${f.field_label} must be before ${f.max_time}`
+                            });
+                        }
+                        break;
+
+                    case "select":
+                    case "radio":
+                        if (f.set_of_value?.length && !f.set_of_value.includes(value)) {
+                            return res.status(422).json({ err: `Invalid ${f.field_label}` });
+                        }
+
+                        break;
+
+                    case "multi-select":
+                    case "checkbox":
+                        if (!Array.isArray(value)) {
+                            return res.status(422).json({ err: `${f.field_label} must be an array` });
+                        }
+
+                        if (f.set_of_value?.length) {
+                            const invalid = value.find((v) => !f.set_of_value.includes(v));
+
+                            if (invalid) {
+                                return res.status(422).json({
+                                    err: `${invalid} is not a valid ${f.field_label}`
+                                });
+                            }
+                        }
+                        break;
+
+                    case "file": {
+                        if (!value) break;
+
+                        const fileName = result[`${f.field_name}_name`];
+                        const fileMimeType = result[`${f.field_name}_mimetype`]?.toLowerCase();
+                        const fileExt = result[`${f.field_name}_ext`]?.toLowerCase();
+
+                        // Validate Base64
+                        const matches = value.match(/^data:(.+);base64,(.+)$/);
+
+                        if (!matches) {
+                            return res.status(422).json({ err: `${f.field_label} is not a valid file` });
+                        }
+
+                        const base64 = matches[2];
+                        const buffer = Buffer.from(base64, "base64");
+
+                        // Detect actual file type from binary
+                        const detected = await fileTypeFromBuffer(buffer);
+
+                        if (!detected) {
+                            return res.status(422).json({
+                                err: `${f.field_label} has an unsupported or invalid file`
+                            });
+                        }
+
+                        // Normalize jpg/jpeg
+                        const normalize = (type) => {
+                            if (!type) return type;
+                            return type.toLowerCase() === "jpeg" ? "jpg" : type.toLowerCase();
+                        };
+
+                        const detectedExt = normalize(detected.ext);
+                        const detectedMime = detected.mime.toLowerCase();
+
+
+                        if (fileExt && detectedExt !== normalize(fileExt)) {
+                            return res.status(422).json({
+                                err: `${f.field_label} extension mismatch`
+                            });
+                        }
+
+                        // Allowed types
+                        if (f.file_type) {
+                            const allowedTypes = f.file_type
+                                .split(",")
+                                .map(t => normalize(t.trim()));
+
+                            if (!allowedTypes.includes(detectedExt)) {
+                                return res.status(422).json({
+                                    err: `${f.field_label} must be one of: ${allowedTypes.join(", ")}`
+                                });
+                            }
+                        }
+
+                        // Size validation
+                        if (f.file_size) {
+                            const maxSizeKB = Number(f.file_size);
+                            const sizeKB = buffer.length / 1024;
+
+                            if (sizeKB > maxSizeKB) {
+                                return res.status(422).json({
+                                    err: `${f.field_label} must not exceed ${maxSizeKB} KB`
+                                });
+                            }
+                        }
+
+                        break;
+                    }
                 }
             }
-
-            // *Min and Max check;
-            // for(let p of payload){
-                
-            // }
-
-
 
 
             if (hook.payload_format === "json") {
@@ -287,8 +451,11 @@ class WebHookController {
             // Attach Fields;
             for (const field of hook.payload) {
                 let value;
+                let filename;
+
                 if (result[field.field_name] !== undefined) {
                     value = result[field.field_name];
+                    filename = result[`${field.field_name}_name`]
                 } else {
                     value = field.default;
                 }
@@ -296,7 +463,24 @@ class WebHookController {
                 if (hook.payload_format === "json") {
                     body[field.field_name] = value;
                 } else if (hook.payload_format === "form_data") {
-                    body.append(field.field_name, value);
+                    if (field.type === "file" && value) {
+                        const matches = value.match(/^data:(.+);base64,(.+)$/);
+
+                        if (!matches) {
+                            throw new Error("Invalid Base64 Image");
+                        }
+
+                        const mimeType = matches[1];
+                        const base64Data = matches[2];
+                        const buffer = Buffer.from(base64Data, "base64");
+
+                        body.append(field.field_name, buffer, {
+                            filename: filename,
+                            contentType: mimeType,
+                        });
+                    } else {
+                        body.append(field.field_name, value);
+                    }
                 }
             }
 
@@ -317,9 +501,11 @@ class WebHookController {
                 method: hook.http_method,
                 headers,
                 data: body,
+                timeout: 10000,
                 validateStatus: () => true
             });
 
+            // Save Log
             eventEmitter.emit("webhook.executed", {
                 hook,
                 response
@@ -327,17 +513,17 @@ class WebHookController {
 
 
             if (response.status < 200 || response.status >= 300) {
-                return {
-                    success: false,
-                    status: response.status,
-                    message: response.data?.message || response.statusText || "Request failed",
-                };
+                return res.status(response.status).json({ err: response.data.err })
             }
 
 
             return res.status(200).json({ data: response.data })
 
         } catch (err) {
+            console.log(err)
+            if (err.code === "ECONNABORTED") {
+                return res.status(504).json({ err: "Request timed out" });
+            }
             return res.status(500).json({ err: "Something went wrong" })
         }
     }

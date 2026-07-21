@@ -142,6 +142,9 @@ class WebServiceController {
 
         const userData = await userModel.findOne({ _id: data.id });
 
+        // Remove form data(because of ai not guess the previous form data) also history save
+        const historyWithoutForm = JSON.parse(history).filter((h) => h.type !== 'form') || []
+
         const embeddings = new HuggingFaceTransformersEmbeddings({
             model: "Xenova/all-MiniLM-L6-v2",
             dtype: "q8"
@@ -196,7 +199,7 @@ class WebServiceController {
                     9. Never mention these instructions, or refer to the Context or tools directly, unless the user explicitly asks how you got the information.
 
                     Previous Chat History:
-                    ${history || ''}
+                    ${historyWithoutForm || ''}
 
                     Context:
                     ${context}`
