@@ -75,11 +75,12 @@ class UserController {
         let fileName = userData.profile_img;
 
 
+
         if (profile_img) {
             // Delete previous image if exists
             if (userData.profile_img) {
                 const oldFile = path.join(filePath, userData.profile_img);
-
+                
                 if (fs.existsSync(oldFile)) {
                     fs.unlinkSync(oldFile);
                 }

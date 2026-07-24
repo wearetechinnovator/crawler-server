@@ -112,7 +112,6 @@ class WebHookController {
         }).sort({ _id: -1 })
 
         return res.status(200).json({ data: webhooks });
-
     }
 
     static async getSingleHook(req, res) {
